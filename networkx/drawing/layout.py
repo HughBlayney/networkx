@@ -844,15 +844,16 @@ def _spectral(A, dim=2):
     # Uses dense eigenvalue solver from numpy
     import numpy as np
 
+    # form normalized Laplacian matrix
     try:
-        nnodes, _ = A.shape
+        D = A.sum(-1)
     except AttributeError as err:
         msg = "spectral() takes an adjacency matrix as input"
         raise nx.NetworkXError(msg) from err
 
-    # form Laplacian matrix where D is diagonal of degrees
-    D = np.identity(nnodes, dtype=A.dtype) * np.sum(A, axis=1)
-    L = D - A
+    L = -A
+    L[A.nonzero()] /= np.sqrt(np.outer(D, D))[A.nonzero()]
+    np.fill_diagonal(L, 1)
 
     eigenvalues, eigenvectors = np.linalg.eig(L)
     # sort and keep smallest nonzero
@@ -873,10 +874,11 @@ def _sparse_spectral(A, dim=2):
         msg = "sparse_spectral() takes an adjacency matrix as input"
         raise nx.NetworkXError(msg) from err
 
-    # form Laplacian matrix
-    # TODO: Rm csr_array wrapper in favor of spdiags array constructor when available
-    D = sp.sparse.csr_array(sp.sparse.spdiags(A.sum(axis=1), 0, nnodes, nnodes))
-    L = D - A
+    # form normalized Laplacian matrix
+    D = sp.sparse.csr_array(np.expand_dims(A.sum(-1), 0))
+    L = -A
+    L[A.nonzero()] /= (D * D.T).sqrt()[A.nonzero()]
+    L.setdiag(1)
 
     k = dim + 1
     # number of Lanczos vectors for ARPACK solver.What is the right scaling?
